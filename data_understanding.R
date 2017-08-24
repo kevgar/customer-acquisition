@@ -1,34 +1,44 @@
+library(data.table)
+library(dplyr)
+
 # load data
-customers <-read.csv("http://ballings.co/hidden/aCRM/data/chapter3/customers.csv",
-                     colClasses="character")
+customers <- data.table(
+    read.csv("http://ballings.co/hidden/aCRM/data/chapter3/customers.csv",
+             colClasses="character")
+    )
 
-purchases <- read.csv("http://ballings.co/hidden/aCRM/data/chapter3/purchases.csv",
+purchases <- data.table(
+    read.csv("http://ballings.co/hidden/aCRM/data/chapter3/purchases.csv",
              colClasses=c("character","Date","character","numeric"))
+    )
 
-registrations <- read.csv("http://ballings.co/hidden/aCRM/data/chapter3/registrations.csv", 
+registrations <- data.table(
+    read.csv("http://ballings.co/hidden/aCRM/data/chapter3/registrations.csv",
              colClasses=c("character","character","character","character","Date"))
+    )
 
 #Look at the data
-str(customers, vec.len=1)
+str(customers)
 #-# 'data.frame': 2114 obs. of 5 variables:
 #-# $ CustomerID : chr "1" ...
 #-# $ ContactName : chr "Mbengue, Randy" ...
 #-# $ CompanyName : chr "Action Wars" ...
 #-# $ CompanyAddress: chr "474 Orchard Avenue, Moorhead, MN 56560" ...
 #-# $ PhoneNumber : chr "8907248356" ...
-str(purchases, vec.len=1)
+str(purchases)
 #-# 'data.frame': 2114 obs. of 4 variables:
 #-# $ CustomerID : chr "1" ...
 #-# $ PurchaseDate : Date, format: "2015-02-05" ...
 #-# $ NumberUsers : chr "2" ...
 #-# $ PurchasePrice: num 99.9 ...
-str(registrations, vec.len=1)
+str(registrations)
 #-# 'data.frame': 25714 obs. of 5 variables:
 #-# $ ContactName : chr "Bonner, Braydon" ...
 #-# $ CompanyName : chr "Action Academy" ...
 #-# $ CompanyAddress : chr "1112 3rd Drive North, Woburn, MA 01801" ...
 #-# $ PhoneNumber : chr "6193847620" ...
 #-# $ RegistrationDate: Date, format: "2014-05-31" ...
+
 #Obtain information required for the ERD
 #Relationship 1
 #purchases and customers can be linked through CustomerID
@@ -36,12 +46,10 @@ str(registrations, vec.len=1)
 #Is CustomerID unique in both tables?
 #It should be in customers,
 #but we expect it won't in purchases.
-length(customers$CustomerID) ==
-    length(unique(customers$CustomerID))
+!any(duplicated(customers$CustomerID))
 #-# [1] TRUE
 #Yes it is unique in customers
-length(purchases$CustomerID) ==
-    length(unique(purchases$CustomerID))
+!any(duplicated(purchases$CustomerID))
 #-# [1] TRUE
 #It is also unique in purchases. This means
 #each customer has only made one purchase up to now.
@@ -57,35 +65,32 @@ all(customers$CustomerID %in% purchases$CustomerID)
 #they are linked by CustomerID
 #This means that we could simply merge customers and
 #purchases without aggregating
+
 #Relationship 2:
 #customers and registrations can be linked
 #through CompanyName. Is CompanyName unique
 #in customers?
-length(customers$CompanyName) ==
-    length(unique(customers$CompanyName))
+!any(duplicated(customers$CompanyName))
+
 #-# [1] TRUE
 #Yes
 #Is CompanyName unique in registrations?
-length(registrations$CompanyName) ==
-    length(unique(registrations$CompanyName))
+!any(duplicated(registrations$CompanyName))
 #-# [1] FALSE
 #No. This is was we expected since individual
 #users of companies are registering
 #How many registrations does a customer typically have?
-reg_agg <- aggregate(registrations$CompanyName,
-                     by=list(CompanyName=registrations$CompanyName),
-                     length)
-merged <- merge(customers[,"CompanyName",drop=FALSE],
-                reg_agg,by="CompanyName",all.x=TRUE)
+reg_agg <- registrations[,.N,CompanyName]
+merged <- left_join(customers[,"CompanyName",drop=F],reg_agg)
 head(merged)
-# CompanyName x
+# CompanyName N
 # 1      Action Wars 2
 # 2     Air Missions 1
 # 3       Air Square 2
 # 4   Airport Family 2
 # 5  Airport Hunters 3
 # 6 Airport Princess 2
-summary(merged$x)
+summary(merged$N)
 #-# Min. 1st Qu. Median Mean 3rd Qu. Max. NA's
 #-# 1.000 1.000 2.000 2.614 3.000 8.000 5
 #We see that there are NAs. This means that there are 0's
@@ -94,14 +99,31 @@ summary(merged$x)
 #It is unclear how this could happen. Mabye a data quality problem.
 #There are only 5 NAs: it might be that some companies received test
 # accounts. These are the customers that don't have a registration.
-merged[is.na(merged$x),]
-# CompanyName  x
+merged[is.na(merged$N),]
+# CompanyName  N
 # 145      Backyard Boss NA
 # 366        Box Brother NA
 # 464      Casino Border NA
 # 756 Coral Intervention NA
 # 824       Dance School NA
-summary(merged$x)
+
+#How many customers does a registration have? This should
+#be 0 or 1 since registrations are done by employees and
+#it is the employer who buys the subscription
+#Let's check
+
+merged <- left_join(registrations[,"CompanyName",drop=FALSE],
+          customers[,.N,CompanyName])
+
+head(merged)
+#-# CompanyName x
+#-# 1 Action Academy NA
+#-# 2 Action Academy NA
+#-# 3 Action Assistant NA
+#-# 4 Action Assistant NA
+#-# 5 Action Assistant NA
+#-# 6 Action Assistant NA
+summary(merged$N)
 #-# Min. 1st Qu. Median Mean 3rd Qu. Max. NA's
 #-# 1 1 1 1 1 1 20201
 #Indeed, there are NA's so this means that not every
@@ -122,12 +144,15 @@ range(purchases$PurchaseDate)
 #-# [1] "2015-02-05" "2015-08-30"
 range(registrations$RegistrationDate)
 #-# [1] "2014-05-31" "2015-08-30"
+
+
 #How are registration date en purchase date related?
-mer <- merge(registrations[,c("RegistrationDate","CompanyName")],
-             customers[,c("CompanyName","CustomerID")],by="CompanyName")
-mer <- merge(mer,purchases[,c("PurchaseDate","CustomerID")],
-             by="CustomerID")
-str(mer,vec.len=1)
+
+mer <- registrations[,c("RegistrationDate","CompanyName")] %>% 
+    inner_join(customers[,c("CompanyName","CustomerID")], by="CompanyName") %>%
+    inner_join(purchases[,c("PurchaseDate","CustomerID")],by="CustomerID")
+
+str(mer)
 #-# 'data.frame': 5513 obs. of 4 variables:
 #-# $ CustomerID : chr "1" ...
 #-# $ CompanyName : chr "Action Wars" ...
@@ -146,5 +171,3 @@ summary(as.integer(mer$PurchaseDate- mer$RegistrationDate))
 # free trials of the premium version? Or is this the base version?
 # If we have answers to these questions we potentially simplify our modeling,
 # but because we haven't we cannot do that at this point.
-             
-             
