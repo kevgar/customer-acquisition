@@ -2,44 +2,40 @@ library(data.table)
 library(dplyr)
 
 # load data
-customers <- data.table(
-    read.csv("http://ballings.co/hidden/aCRM/data/chapter3/customers.csv",
-             colClasses="character")
-    )
-
-purchases <- data.table(
-    read.csv("http://ballings.co/hidden/aCRM/data/chapter3/purchases.csv",
-             colClasses=c("character","Date","character","numeric"))
-    )
-
-registrations <- data.table(
-    read.csv("http://ballings.co/hidden/aCRM/data/chapter3/registrations.csv",
-             colClasses=c("character","character","character","character","Date"))
-    )
+customers <- 
+    data.table(read.csv("http://ballings.co/hidden/aCRM/data/chapter3/customers.csv",
+             colClasses="character"))
+purchases <- 
+    data.table(read.csv("http://ballings.co/hidden/aCRM/data/chapter3/purchases.csv",
+             colClasses=c("character","Date","character","numeric")))
+registrations <- 
+    data.table(read.csv("http://ballings.co/hidden/aCRM/data/chapter3/registrations.csv",
+             colClasses=c("character","character","character","character","Date")))
 
 #Look at the data
 str(customers)
-#-# 'data.frame': 2114 obs. of 5 variables:
-#-# $ CustomerID : chr "1" ...
-#-# $ ContactName : chr "Mbengue, Randy" ...
-#-# $ CompanyName : chr "Action Wars" ...
-#-# $ CompanyAddress: chr "474 Orchard Avenue, Moorhead, MN 56560" ...
-#-# $ PhoneNumber : chr "8907248356" ...
+# 'data.frame': 2114 obs. of 5 variables:
+# $ CustomerID : chr "1" ...
+# $ ContactName : chr "Mbengue, Randy" ...
+# $ CompanyName : chr "Action Wars" ...
+# $ CompanyAddress: chr "474 Orchard Avenue, Moorhead, MN 56560" ...
+# $ PhoneNumber : chr "8907248356" ...
 str(purchases)
-#-# 'data.frame': 2114 obs. of 4 variables:
-#-# $ CustomerID : chr "1" ...
-#-# $ PurchaseDate : Date, format: "2015-02-05" ...
-#-# $ NumberUsers : chr "2" ...
-#-# $ PurchasePrice: num 99.9 ...
+# 'data.frame': 2114 obs. of 4 variables:
+# $ CustomerID : chr "1" ...
+# $ PurchaseDate : Date, format: "2015-02-05" ...
+# $ NumberUsers : chr "2" ...
+# $ PurchasePrice: num 99.9 ...
 str(registrations)
-#-# 'data.frame': 25714 obs. of 5 variables:
-#-# $ ContactName : chr "Bonner, Braydon" ...
-#-# $ CompanyName : chr "Action Academy" ...
-#-# $ CompanyAddress : chr "1112 3rd Drive North, Woburn, MA 01801" ...
-#-# $ PhoneNumber : chr "6193847620" ...
-#-# $ RegistrationDate: Date, format: "2014-05-31" ...
+# 'data.frame': 25714 obs. of 5 variables:
+# $ ContactName : chr "Bonner, Braydon" ...
+# $ CompanyName : chr "Action Academy" ...
+# $ CompanyAddress : chr "1112 3rd Drive North, Woburn, MA 01801" ...
+# $ PhoneNumber : chr "6193847620" ...
+# $ RegistrationDate: Date, format: "2014-05-31" ...
 
 #Obtain information required for the ERD
+
 #Relationship 1
 #purchases and customers can be linked through CustomerID
 #What are the characteristics of this relationship?
@@ -47,16 +43,16 @@ str(registrations)
 #It should be in customers,
 #but we expect it won't in purchases.
 !any(duplicated(customers$CustomerID))
-#-# [1] TRUE
+# [1] TRUE
 #Yes it is unique in customers
 !any(duplicated(purchases$CustomerID))
-#-# [1] TRUE
+# [1] TRUE
 #It is also unique in purchases. This means
 #each customer has only made one purchase up to now.
 #This is plausible since it is a new product
 #Does each customer have one purchase?
 all(customers$CustomerID %in% purchases$CustomerID)
-#-# [1] TRUE
+# [1] TRUE
 #Yes
 #In sum
 #purchases 1 CustomerID 1 customers
@@ -71,12 +67,11 @@ all(customers$CustomerID %in% purchases$CustomerID)
 #through CompanyName. Is CompanyName unique
 #in customers?
 !any(duplicated(customers$CompanyName))
-
-#-# [1] TRUE
+# [1] TRUE
 #Yes
 #Is CompanyName unique in registrations?
 !any(duplicated(registrations$CompanyName))
-#-# [1] FALSE
+# [1] FALSE
 #No. This is was we expected since individual
 #users of companies are registering
 #How many registrations does a customer typically have?
@@ -90,9 +85,11 @@ head(merged)
 # 4   Airport Family 2
 # 5  Airport Hunters 3
 # 6 Airport Princess 2
+
 summary(merged$N)
-#-# Min. 1st Qu. Median Mean 3rd Qu. Max. NA's
-#-# 1.000 1.000 2.000 2.614 3.000 8.000 5
+# Min. 1st Qu. Median Mean 3rd Qu. Max. NA's
+# 1.000 1.000 2.000 2.614 3.000 8.000 5
+
 #We see that there are NAs. This means that there are 0's
 #We can safely say that the relationship is 0..N.
 #This means there are customers that don't have registrations
@@ -111,24 +108,23 @@ merged[is.na(merged$N),]
 #be 0 or 1 since registrations are done by employees and
 #it is the employer who buys the subscription
 #Let's check
-
 merged <- left_join(registrations[,"CompanyName",drop=FALSE],
           customers[,.N,CompanyName])
-
 head(merged)
-#-# CompanyName x
-#-# 1 Action Academy NA
-#-# 2 Action Academy NA
-#-# 3 Action Assistant NA
-#-# 4 Action Assistant NA
-#-# 5 Action Assistant NA
-#-# 6 Action Assistant NA
+# CompanyName x
+# 1 Action Academy NA
+# 2 Action Academy NA
+# 3 Action Assistant NA
+# 4 Action Assistant NA
+# 5 Action Assistant NA
+# 6 Action Assistant NA
 summary(merged$N)
-#-# Min. 1st Qu. Median Mean 3rd Qu. Max. NA's
-#-# 1 1 1 1 1 1 20201
+# Min. 1st Qu. Median Mean 3rd Qu. Max. NA's
+# 1 1 1 1 1 1 20201
 #Indeed, there are NA's so this means that not every
 #registration has a customer, and the only other value
 #is a 1. Hence it is a 0..1 relationship.
+
 #In sum
 # customers 0..1 CompanyName 0..N registrations
 #Let's have a lookg at the frequency of purchases
@@ -141,26 +137,24 @@ hist(registrations$RegistrationDate,
 
 
 range(purchases$PurchaseDate)
-#-# [1] "2015-02-05" "2015-08-30"
+# [1] "2015-02-05" "2015-08-30"
 range(registrations$RegistrationDate)
-#-# [1] "2014-05-31" "2015-08-30"
-
+# [1] "2014-05-31" "2015-08-30"
 
 #How are registration date en purchase date related?
-
 mer <- registrations[,c("RegistrationDate","CompanyName")] %>% 
     inner_join(customers[,c("CompanyName","CustomerID")], by="CompanyName") %>%
     inner_join(purchases[,c("PurchaseDate","CustomerID")],by="CustomerID")
 
 str(mer)
-#-# 'data.frame': 5513 obs. of 4 variables:
-#-# $ CustomerID : chr "1" ...
-#-# $ CompanyName : chr "Action Wars" ...
-#-# $ RegistrationDate: Date, format: "2015-01-04" ...
-#-# $ PurchaseDate : Date, format: "2015-02-05" ...
+# 'data.frame': 5513 obs. of 4 variables:
+# $ CustomerID : chr "1" ...
+# $ CompanyName : chr "Action Wars" ...
+# $ RegistrationDate: Date, format: "2015-01-04" ...
+# $ PurchaseDate : Date, format: "2015-02-05" ...
 summary(as.integer(mer$PurchaseDate- mer$RegistrationDate))
-#-# Min. 1st Qu. Median Mean 3rd Qu. Max.
-#-# 32.00 32.00 32.00 32.01 32.00 33.00
+# Min. 1st Qu. Median Mean 3rd Qu. Max.
+# 32.00 32.00 32.00 32.01 32.00 33.00
 # This is very peculiar, this means that all employees of a company
 # always registered on the exact same day. Moreover that day is always
 # 32 days before the actual purchase date. It could be that there is/was
