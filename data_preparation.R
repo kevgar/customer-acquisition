@@ -2,165 +2,128 @@ library(data.table)
 library(dplyr)
 library(stringr)
 
-#The first question to answer is always: do we need
-#all available tables?
-#At first sight we need all tables:
-#customers: to compute the dependent,
-#registrations: to compute the predictors
-#purchases: for the time window (purchase date)
-# Wich variables will we compute?
-#dependent:
+# Description of variables to be computed
+
+# dependent variable (from customers table)
 # acquisition: Is company in the customer table. If yes: acquired.
-#independents:
+
+# time window (from purchases table)
+# purchase date
+
+# independent variabels (from registrations table):
 # number of registrations
 # recency of registration
 # elapsed time since first registration
 # variance registration time
 # state
 # zip code first three digits
-#Because they have a 1:1 relationship, we can merge
-#purchases and customers
-pur_cus <- data.table(inner_join(purchases,customers,by="CustomerID"))
-# Create time window
-#Set t4 to the maximum purchase date
-(t4 <- max(pur_cus$PurchaseDate))
-#-# [1] "2015-08-30"
-#The software company wants a dependent
-#period of 30 days,
-(t3 <- t4-30)
-#-# [1] "2015-07-31"
-#Use an operational period of 1 day
-(t2 <- t3 - 1)
-#-# [1] "2015-07-30"
-#Set t1 to the minimum registration data
-(t1 <- min(registrations$RegistrationDate))
-#-# [1] "2014-05-31"
-#Split data into independent and dependent data
-registrationsIND <- registrations[registrations$RegistrationDate <= t2 &
-                                      registrations$RegistrationDate >= t1,]
-pur_cusDEP <- pur_cus[pur_cus$PurchaseDate > t3 &
-                          pur_cus$PurchaseDate <= t4,]
-#Make sure to only select companies that have not purchased before t2
-pur_cus_bef_t2 <- unique(pur_cus[pur_cus$PurchaseDate <= t2,"CompanyName"])
-registrationsIND <-
-    registrationsIND[!(registrationsIND$CompanyName %in%
-                         pur_cus_bef_t2),]
-#Compute dependent
-#This comes down to merging registrationsIND with pur_cusDEP
-#Note the left outer merge
+
+# join purchases and customers on "CustomerID"
+purchases_customers <- data.table(inner_join(purchases,customers))
+
+# Specify the time window
+
+# NOTE: 
+# t1 stands for the start of the independent period, 
+# t2 stands for the end of the independent period, 
+# t3 stands for the start of the dependent period, and 
+# t4 stands for the end of the dependent period.
+
+# Let t4 be the maximum purchase date
+(t4 <- max(purchases_customers$PurchaseDate)) # [1] "2015-08-30"
+
+# Let the dependent period be 30 days
+(t3 <- t4-30) # [1] "2015-07-31"
+
+# Let the operational period be 1 day
+(t2 <- t3 - 1) # [1] "2015-07-30"
+
+# Let t1 be the earliest registration date
+(t1 <- min(registrations$RegistrationDate)) # [1] "2014-05-31"
+
+# Split data into independent and dependent period
+registrationsIND <- registrations[RegistrationDate <= t2 & RegistrationDate >= t1,]
+purchases_customersDEP <- purchases_customers[PurchaseDate > t3 & PurchaseDate <= t4,]
+
+# Include only those companies that were not a customer at t2 (i.e., prospects). I
+# In addition we also need all the prospects that did not become customers between 
+# t3 and t4.
+
+purchases_customers_before_t2 <- unique(purchases_customers[PurchaseDate <= t2,"CompanyName"])
+registrationsIND <- registrationsIND[!(CompanyName %in% purchases_customers_before_t2),]
+
+# Compute dependent
+# LEFT JOIN registrationsIND and purchases_customersDEP on "CompanyName"
+
 dependent <- 
-    unique(registrationsIND[,"CompanyName"]) %>% 
-    left_join(pur_cusDEP[,"CompanyName",drop=FALSE][,Acquisition:=1]) %>% 
+    # LHS: the companies that were prospects
+    unique(registrationsIND[,"CompanyName"]) %>%
+    # RHS: the companies that became customers
+    left_join(purchases_customersDEP[,"CompanyName",drop=FALSE][,Acquisition:=1]) %>% 
     data.table()
 
+# The NA's introduced by the join represent prospects who did not 
+# become customers. Thus, for these cases we set Acquisition to be 0.
 dependent[,Acquisition:=as.factor(ifelse(is.na(Acquisition),0,Acquisition))]
-
 str(dependent, vec.len=1)
-# Classes ‘data.table’ and 'data.frame':	4990 obs. of  2 variables:
-#     $ CompanyName: chr  "Action Academy" ...
-# $ Acquisition: Factor w/ 2 levels "0","1": 1 1 ...
-# - attr(*, ".internal.selfref")=<externalptr> 
+
 table(dependent$Acquisition, useNA="ifany")
-# Note: freq 0s does not match original solution
 # 0    1 
 # 3777 1213 
 
-#Compute predictor variables
-#We can only use the registrationsIND table
+# Compute independent variabels (from registrationsIND table)
 str(registrationsIND, vec.len=1)
-# Classes ‘data.table’ and 'data.frame':	12621 obs. of  5 variables:
-#     $ ContactName     : chr  "Bonner, Braydon" ...
-# $ CompanyName     : chr  "Action Academy" ...
-# $ CompanyAddress  : chr  "1112 3rd Drive North, Woburn, MA 01801" ...
-# $ PhoneNumber     : chr  "6193847620" ...
-# $ RegistrationDate: Date, format: "2014-05-31" ...
-# - attr(*, ".internal.selfref")=<externalptr> 
 
-NBR_registrations <- registrationsIND[,list(NBR_registrations=.N),"CompanyName"]
-
-str(NBR_registrations, vec.len=1)
-# Classes ‘data.table’ and 'data.frame':	4990 obs. of  2 variables:
-#     $ CompanyName      : chr  "Action Academy" ...
-# $ NBR_registrations: int  2 5 ...
-# - attr(*, ".internal.selfref")=<externalptr> 
-summary(NBR_registrations$NBR_registration)
+# Compute number of registrations for each company
+num_registrations <- registrationsIND[,list(num_registrations=.N),"CompanyName"]
+str(num_registrations, vec.len=1)
+summary(num_registrations$num_registrations)
 # Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
 # 1.000   1.000   2.000   2.529   3.000   9.000 
-hist(NBR_registrations$NBR_registrations)
-# recency of registration
-MAX_registration_date <-
-    registrationsIND[,list(MAX_registration_date=max(RegistrationDate)),CompanyName]
 
-str(MAX_registration_date, vec.len=1)
-# Classes ‘data.table’ and 'data.frame':	4990 obs. of  2 variables:
-#     $ CompanyName          : chr  "Action Academy" ...
-# $ MAX_registration_date: Date, format: "2014-07-02" ...
-# - attr(*, ".internal.selfref")=<externalptr> 
+hist(num_registrations$num_registrations)
 
-REC_registrations <-
-    MAX_registration_date[,REC_registrations := as.numeric(t2) - 
-                              as.numeric(MAX_registration_date)][,-2]
+# compute max registration date for each company
+max_registration_date <- registrationsIND[,list(max_registration_date=max(RegistrationDate)),CompanyName]
+str(max_registration_date, vec.len=1)
+
+# compute how many days have past since last registration
+recency_registrations <- max_registration_date[,recency_registrations := as.numeric(t2) - as.numeric(max_registration_date)][,-2]
             
-summary(REC_registrations$REC_registrations)
+summary(recency_registrations$recency_registrations)
 # Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
 # 0.00   13.00   31.00   44.33   61.00  393.00 
-hist(REC_registrations$REC_registrations)
+hist(recency_registrations$recency_registrations)
 
 # elapsed time since first registration
-MIN_registration_date <- registrationsIND[,list(MIN_registration_date=min(RegistrationDate)),
-                                          by=CompanyName]
-
-
-str(MIN_registration_date, vec.len=1)
-# Classes ‘data.table’ and 'data.frame':	4990 obs. of  2 variables:
-#     $ CompanyName          : chr  "Action Academy" ...
-# $ MIN_registration_date: Date, format: "2014-07-02" ...
-# - attr(*, ".internal.selfref")=<externalptr> 
+min_registration_date <- registrationsIND[,list(min_registration_date=min(RegistrationDate)), by=CompanyName]
+str(min_registration_date, vec.len=1)
 
 # duration of registration
-DUR_registrations <-
-    MIN_registration_date[,DUR_registrations := as.numeric(t2) - 
-                              as.numeric(MIN_registration_date)][,-2]
+duration_registrations <- min_registration_date[,duration_registrations := as.numeric(t2) - as.numeric(min_registration_date)][,-2]
+str(duration_registrations, vec.len=1)
 
-str(DUR_registrations, vec.len=1)
-# Classes ‘data.table’ and 'data.frame':	4990 obs. of  2 variables:
-#     $ CompanyName      : chr  "Action Academy" ...
-# $ DUR_registrations: num  425 373 ...
-# - attr(*, ".internal.selfref")=<externalptr> 
-summary(DUR_registrations$DUR_registrations)
+summary(duration_registrations$duration_registrations)
 # Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
 # 0.00   13.00   31.00   44.39   61.00  425.00 
-hist(DUR_registrations$DUR_registrations)
-# variance registration time
-VAR_registrations <- 
-    registrationsIND[, list(VAR_registration_date=var(RegistrationDate)),
-                     by=CompanyName]
-    
-VAR_registrations[is.na(VAR_registration_date),VAR_registration_date:=0]
+hist(duration_registrations$duration_registrations)
+# variance in registration times
+variance_registrations <- registrationsIND[, list(variance_registration_date=var(RegistrationDate)), by=CompanyName]
+variance_registrations[is.na(variance_registration_date),variance_registration_date:=0]
 
-str(VAR_registrations, vec.len=1)
-# Classes ‘data.table’ and 'data.frame':	4990 obs. of  2 variables:
-#     $ CompanyName          : chr  "Action Academy" ...
-# $ VAR_registration_date: num  512 ...
-# - attr(*, ".internal.selfref")=<externalptr> 
-summary(VAR_registrations$VAR_registration_date)
+str(variance_registrations, vec.len=1)
+summary(variance_registrations$variance_registration_date)
 # Min.  1st Qu.   Median     Mean  3rd Qu.     Max. 
 # 0.0000   0.0000   0.0000   0.1882   0.0000 512.0000 
-hist(VAR_registrations$VAR_registration_date)
-# state
-#randomForest can handle categorical predictors
-#with up to 53 categories. Since there are only
-#50 states in the US we do not need to make
-#dummy variables if we only use randomForest.
-str(registrationsIND$CompanyAddress)
-#-# chr [1:10487] "1112 3rd Drive North, Woburn, MA 01801" ...
+hist(variance_registrations$variance_registration_date)
+
+
+# extract state from the address string
+str(registrationsIND$CompanyAddress) # chr [1:12621] "1112 3rd Drive North, Woburn, MA 01801" ...
+
 #remove duplicates
 registrationsIND <- unique(registrationsIND[,c("CompanyName","CompanyAddress")])
 str(registrationsIND, vec.len=1)
-# Classes ‘data.table’ and 'data.frame':	4990 obs. of  2 variables:
-#     $ CompanyName   : chr  "Action Academy" ...
-# $ CompanyAddress: chr  "1112 3rd Drive North, Woburn, MA 01801" ...
-# - attr(*, ".internal.selfref")=<externalptr> 
 
 get_state <- function(address) {
     address %>% 
@@ -170,100 +133,63 @@ get_state <- function(address) {
         str_split(" ") %>% 
         lapply(X=.,FUN=function(x) x[2]) %>%
         unlist()
-    }
+}
+get_state("1112 3rd Drive North, Woburn, MA 01801") # [1] "MA"
+
+get_zip_first_digit <- function(address) {
+    address %>%
+        str_split(",") %>% 
+        lapply(X=.,FUN=function(x) x[3]) %>% 
+        unlist() %>% 
+        str_split(" ") %>% 
+        lapply(X=.,FUN=function(x) x[3]) %>%
+        unlist() %>%
+    str_split("") %>% 
+    lapply(X=.,FUN=function(x) x[1]) %>%
+    unlist()
+}
+get_zip_first_digit("1112 3rd Drive North, Woburn, MA 01801") # [1] 0
 
 state <- registrationsIND[,CompanyState:=get_state(CompanyAddress)][,-2]
-
-
 str(state, vec.len=1)
-# Classes ‘data.table’ and 'data.frame':	4990 obs. of  2 variables:
-#     $ CompanyName : chr  "Action Academy" ...
-# $ CompanyState: chr  "MA" ...
-# - attr(*, ".internal.selfref")=<externalptr> 
 barplot(table(state$CompanyState))
+
+zip_first_digit <- registrationsIND[,CompanyZipFirstDigit:=get_zip_first_digit(CompanyAddress)][,-c(2,3)]
+str(zip_first_digit, vec.len=1)
+barplot(table(zip_first_digit$CompanyZipFirstDigit))
+
+
 # Merge independents and dependent
 data <- list(state,
-             VAR_registrations,
-             DUR_registrations,
-             REC_registrations,
-             NBR_registrations,
+             zip_first_digit,
+             variance_registrations,
+             duration_registrations,
+             recency_registrations,
+             num_registrations,
              dependent)
 str(data, vec.len=1)
-#-# List of 6
-#-# $ :'data.frame': 4128 obs. of 2 variables:
-#-# ..$ CompanyName: chr [1:4128] "Action Academy" ...
-#-# ..$ state : chr [1:4128] "MA" ...
-#-# $ :'data.frame': 4128 obs. of 2 variables:
-#-# ..$ CompanyName : chr [1:4128] "Action Academy" ...
-#-# ..$ VAR_registration_date: num [1:4128] 512 ...
-#-# $ :'data.frame': 4128 obs. of 2 variables:
-#-# ..$ CompanyName : chr [1:4128] "Action Academy" ...
-#-# ..$ DUR_registrations: num [1:4128] 425 373 ...
-#-# $ :'data.frame': 4128 obs. of 2 variables:
-#-# ..$ CompanyName : chr [1:4128] "Action Academy" ...
-#-# ..$ REC_registrations: num [1:4128] 393 331 ...
-#-# $ :'data.frame': 4128 obs. of 2 variables:
-#-# ..$ CompanyName : chr [1:4128] "Action Academy" ...
-#-# ..$ NBR_registrations: int [1:4128] 2 5 ...
-#-# $ :'data.frame': 4128 obs. of 2 variables:
-#-# ..$ CompanyName: chr [1:4128] "Action Academy" ...
-#-# ..$ Acquisition: Factor w/ 2 levels "0","1": 1 1 ...
-# Look at the dimensions
-# ?Number of instances should be identical
-lapply(data,dim)
-# [[1]]
-# [1] 4990    2
-# 
-# [[2]]
-# [1] 4990    2
-# 
-# [[3]]
-# [1] 4990    2
-# 
-# [[4]]
-# [1] 4990    2
-# 
-# [[5]]
-# [1] 4990    2
-# 
-# [[6]]
-# [1] 4990    2
-basetable <- Reduce(function(x,y) merge(x,y,by='CompanyName'),
-                    data)
 
+# Number of instances should be identical
+lapply(data,dim)
+
+basetable <- Reduce(function(x,y) merge(x,y,by='CompanyName'), data)
 
 str(basetable, vec.len=1)
-# Classes ‘data.table’ and 'data.frame':	4990 obs. of  7 variables:
-#     $ CompanyName          : chr  "Action Academy" ...
-# $ CompanyState         : chr  "MA" ...
-# $ VAR_registration_date: num  512 ...
-# $ DUR_registrations    : num  425 373 ...
-# $ REC_registrations    : num  393 331 ...
-# $ NBR_registrations    : int  2 5 ...
-# $ Acquisition          : Factor w/ 2 levels "0","1": 1 1 ...
-# - attr(*, ".internal.selfref")=<externalptr> 
-#     - attr(*, "sorted")= chr "CompanyName"
+
 basetable$CompanyName <- NULL
 Acquisition <- basetable$Acquisition
+
 basetable$Acquisition <- NULL
 str(basetable, vec.len=1)
-# Classes ‘data.table’ and 'data.frame':	4990 obs. of  5 variables:
-#     $ CompanyState         : chr  "MA" ...
-# $ VAR_registration_date: num  512 ...
-# $ DUR_registrations    : num  425 373 ...
-# $ REC_registrations    : num  393 331 ...
-# $ NBR_registrations    : int  2 5 ...
-# - attr(*, ".internal.selfref")=<externalptr> 
-#Any missing values?
+
 colSums(is.na(basetable))
-# CompanyState VAR_registration_date     DUR_registrations 
-# 0                     0                     0 
-# REC_registrations     NBR_registrations 
-# 0                     0 
-sum(is.na(Acquisition))
-# [1] 0
+
+sum(is.na(Acquisition)) # [1] 0
+
 #Change state to factor for the modeling phase
 basetable[,CompanyState:=as.factor(CompanyState)]
+basetable[,CompanyZipFirstDigit:=as.factor(CompanyZipFirstDigit)]
+
 #Our basetable is now ready and we can
 #move on the modeling phase
 
