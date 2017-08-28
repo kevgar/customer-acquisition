@@ -1,10 +1,18 @@
-
 #We'll be using random forest and hence we will
 #not require a validation set.
 #Split the data in a train and test set
 ind <- 1:nrow(basetable)
 indTRAIN <- sample(ind,round(0.5*length(ind)))
 indTEST <- ind[-indTRAIN]
+
+mod1 <- glm(Acquisition[indTRAIN] ~ CompanyZipFirstDigit + variance_registration_date + 
+              duration_registrations + recency_registrations + num_registrations,
+          basetable[indTRAIN,],
+          family = "binomial")
+
+summary(mod1)
+
+
 #Load the randomForest package
 if (!require('randomForest')){
     install.packages('randomForest',
