@@ -12,11 +12,12 @@ library(stringr)
 
 # independent variabels (from registrations table):
 # number of registrations
-# recency of registration
-# elapsed time since first registration
-# variance registration time
+# number of days since last registration
+# number of days since first registration
+# range of registration date
+# standard deviation in registration date
 # state
-# zip code first three digits
+# zip code prefix
 
 # join purchases and customers on "CustomerID"
 purchases_customers <- data.table(inner_join(purchases,customers))
@@ -32,7 +33,7 @@ purchases_customers <- data.table(inner_join(purchases,customers))
 # Let t4 be the maximum purchase date
 (t4 <- max(purchases_customers$PurchaseDate)) # [1] "2015-08-30"
 
-# Let the dependent period be 30 days
+# Let the dependent period be 32 days
 (t3 <- t4-30) # [1] "2015-07-31"
 
 # Let the operational period be 1 day
@@ -107,18 +108,32 @@ summary(duration_registrations$duration_registrations)
 # Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
 # 0.00   13.00   31.00   44.39   61.00  425.00 
 hist(duration_registrations$duration_registrations)
-# variance in registration times
+
+
+# mean in registration date?
+mean_registrations <- registrationsIND[, list(mean_registration_date=mean(RegistrationDate)), by=CompanyName]
+
+
+# variance in registration date?
 variance_registrations <- registrationsIND[, list(variance_registration_date=var(RegistrationDate)), by=CompanyName]
-variance_registrations[is.na(variance_registration_date),variance_registration_date:=0]
-
-str(variance_registrations, vec.len=1)
-summary(variance_registrations$variance_registration_date)
-# Min.  1st Qu.   Median     Mean  3rd Qu.     Max. 
-# 0.0000   0.0000   0.0000   0.1882   0.0000 512.0000 
-hist(variance_registrations$variance_registration_date)
+variance_registrations[is.na(variance_registration_date), variance_registration_date:=0]
 
 
-# extract state from the address string
+# number of same-day registrations
+sameday_registrations <- registrationsIND[, list(sameday_registrations=max(table(RegistrationDate))), by=CompanyName]
+
+# number of unique registrat dates?
+unique_registration_dates <- registrationsIND[, list(unique_registration_dates=length(unique(RegistrationDate))), by=CompanyName]
+
+
+
+str(sameday_registrations, vec.len=1)
+summary(sameday_registrations$sameday_registrations)
+# Min. 1st Qu.  Median    Mean 3rd Qu.    Max.
+# 1.00    1.00    2.00    2.49    3.00    9.00
+hist(same_registration_date$same_registration_date)
+
+# extract state from the address string 
 str(registrationsIND$CompanyAddress) # chr [1:12621] "1112 3rd Drive North, Woburn, MA 01801" ...
 
 #remove duplicates
@@ -158,38 +173,37 @@ zip_first_digit <- registrationsIND[,CompanyZipFirstDigit:=get_zip_first_digit(C
 str(zip_first_digit, vec.len=1)
 barplot(table(zip_first_digit$CompanyZipFirstDigit))
 
-
-# Merge independents and dependent
+# join independent and dependent 
 data <- list(state,
              zip_first_digit,
-             variance_registrations,
              duration_registrations,
              recency_registrations,
              num_registrations,
+             sameday_registrations,
+             mean_registrations,
+             variance_registrations,
+             unique_registration_dates,
              dependent)
 str(data, vec.len=1)
 
-# Number of instances should be identical
+# verify dimensions match
 lapply(data,dim)
+# verify there are no NAs
+lapply(data,anyNA)
 
-basetable <- Reduce(function(x,y) merge(x,y,by='CompanyName'), data)
-
+basetable <- data.table(Reduce(inner_join, data))
 str(basetable, vec.len=1)
 
-basetable$CompanyName <- NULL
+# Store the response variable
 Acquisition <- basetable$Acquisition
-
-basetable$Acquisition <- NULL
+# Remove unnecesary columns
+basetable[,c("CompanyName","Acquisition")] <- NULL
 str(basetable, vec.len=1)
 
-colSums(is.na(basetable))
-
-sum(is.na(Acquisition)) # [1] 0
-
-#Change state to factor for the modeling phase
+# Convert character columns to factor
 basetable[,CompanyState:=as.factor(CompanyState)]
 basetable[,CompanyZipFirstDigit:=as.factor(CompanyZipFirstDigit)]
+str(basetable, vec.len=1)
 
 #Our basetable is now ready and we can
 #move on the modeling phase
-

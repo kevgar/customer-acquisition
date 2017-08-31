@@ -1,90 +1,67 @@
-#We'll be using random forest and hence we will
-#not require a validation set.
-#Split the data in a train and test set
+library("randomForest")
+library("AUC")
+library('lift')
+
+# Split the data in a train and test set
 ind <- 1:nrow(basetable)
-indTRAIN <- sample(ind,round(0.5*length(ind)))
-indTEST <- ind[-indTRAIN]
+indTrain <- sample(ind,round(0.5*length(ind)))
+indTest <- ind[-indTrain]
 
-mod1 <- glm(Acquisition[indTRAIN] ~ CompanyZipFirstDigit + variance_registration_date + 
-              duration_registrations + recency_registrations + num_registrations,
-          basetable[indTRAIN,],
-          family = "binomial")
+# fit random forest model on training set
+rf <- randomForest(x=basetable[indTrain,], y=Acquisition[indTrain])
 
-summary(mod1)
+# deploy model on the test set
+pred <- predict(rf,basetable[indTest,], type="prob")[,2]
 
+# evaluate model performance
 
-#Load the randomForest package
-if (!require('randomForest')){
-    install.packages('randomForest',
-                     repos='http://cran.rstudio.com',
-                     quiet=TRUE)
-    library("randomForest")
-}
-#Fit the random forest on the training set
-rf <- randomForest(x=basetable[indTRAIN,],
-                   y=Acquisition[indTRAIN])
-#Deploy the forest on the test set
-pred <- predict(rf,basetable[indTEST,],
-                type="prob")[,2]
-#Next we need to evaluate our model. If our model
-#perfomance is not satisfactory we might need
-#to go back to data modeling or even data
-#preparation.
+# plot the ROC curve
+plot(roc(pred,Acquisition[indTest]))
 
-#Load the AUC package
-if (!require('AUC')){
-    install.packages('AUC',
-                     repos='http://cran.rstudio.com',
-                     quiet=TRUE)
-    library("AUC")
-}
-#Plot the ROC curve
-plot(roc(pred,Acquisition[indTEST]))
+# compute the AUC
+auc(roc(pred,Acquisition[indTest])) # [1] 0.8564123
+# this is a good AUC
 
-#Compute the AUC
-auc(roc(pred,Acquisition[indTEST]))
-#-# Error in rank(prob): argument "prob" is missing, with no default
-#This is a very good AUC
-#Load the lift package
-if (!require('lift')){
-    install.packages('lift',
-                     repos='http://cran.rstudio.com',
-                     quiet=TRUE)
-    library('lift')
-}
-#Plot the lift curve
-plotLift(pred,Acquisition[indTEST])
+# plot the lift curve
+plotLift(pred,Acquisition[indTest])
 
 #Compute the top decile lift
-TopDecileLift(pred,Acquisition[indTEST])
-#-# [1] 1.967
+TopDecileLift(pred,Acquisition[indTest]) # [1] 2.387
+
 #We want to have some insight into our model
 #and make sure the relationships are plausible
 #The first step is to look at which variables
 #are important
 varImpPlot(rf)
-VAR_registration
-#The second step is to look at some of the relationships
-partialPlot(x=rf,x.var="VAR_registration_date",
-            pred.data=basetable[indTEST,],which.class=1)
-#This plot tells us that more variance in the
-#registration date results in a higher
-#propensity to be acquired
-partialPlot(x=rf,x.var="DUR_registrations",
-            pred.data=basetable[indTEST,],which.class=1)
-#The more time has elapsed since the first registration
-#the lower the propensity to be acquired
-partialPlot(x=rf,x.var="REC_registrations",
-            pred.data=basetable[indTEST,],which.class=1)
 
-#The more time has elapsed since the last registration
-#the lower the propensity to be acquired
-partialPlot(x=rf,x.var="NBR_registrations",
-            pred.data=basetable[indTEST,],which.class=1)
+# next we look at some of the relationships
+partialPlot(x=rf,x.var="variance_registration_date",
+            pred.data=basetable[indTest,],which.class=1)
+# More variance in the registration date results 
+# in a higher propensity to be acquired
 
-#More registrations results in a higher propensity
-#to be acquired
-#All the relationships are plausible and intuitive.
-#In addition the lift and AUC are very good.
-#Hence we can conclude the modeling phase
+partialPlot(x=rf,x.var="unique_registration_dates",
+            pred.data=basetable[indTest,],which.class=1)
+# More unique registration dates results 
+# in a higher propensity to be acquired
+
+partialPlot(x=rf,x.var="duration_registrations",
+            pred.data=basetable[indTest,],which.class=1)
+# More time since the first registration results 
+# in a lower propensity to be acquired
+
+partialPlot(x=rf,x.var="recency_registrations",
+            pred.data=basetable[indTest,],which.class=1)
+# More time has elapsed since the last registration
+# the lower the propensity to be acquired
+
+partialPlot(x=rf,x.var="num_registrations",
+            pred.data=basetable[indTest,],which.class=1)
+# More registrations results in a higher propensity
+# to be acquired
+
+# The relationships match what we intuitively expect.
+
+# In addition the lift and AUC are very good.
+# Hence we can conclude the modeling phase
 
