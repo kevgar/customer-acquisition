@@ -47,7 +47,7 @@ partialPlot(x=rf,x.var="unique_registration_dates",
 
 partialPlot(x=rf,x.var="duration_registrations",
             pred.data=basetable[indTest,],which.class=1)
-# More time since the first registration results 
+# More time since the first registration results
 # in a lower propensity to be acquired
 
 partialPlot(x=rf,x.var="recency_registrations",

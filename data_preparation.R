@@ -34,7 +34,7 @@ purchases_customers <- data.table(inner_join(purchases,customers))
 (t4 <- max(purchases_customers$PurchaseDate)) # [1] "2015-08-30"
 
 # Let the dependent period be 32 days
-(t3 <- t4-30) # [1] "2015-07-31"
+(t3 <- t4-32) # [1] "2015-07-31"
 
 # Let the operational period be 1 day
 (t2 <- t3 - 1) # [1] "2015-07-30"
@@ -43,7 +43,7 @@ purchases_customers <- data.table(inner_join(purchases,customers))
 (t1 <- min(registrations$RegistrationDate)) # [1] "2014-05-31"
 
 # Split data into independent and dependent period
-registrationsIND <- registrations[RegistrationDate <= t2 & RegistrationDate >= t1,]
+registrationsIND <- registrations[RegistrationDate >= t1 & RegistrationDate <= t2,]
 purchases_customersDEP <- purchases_customers[PurchaseDate > t3 & PurchaseDate <= t4,]
 
 # Include only those companies that were not a customer at t2 (i.e., prospects). I
@@ -109,11 +109,6 @@ summary(duration_registrations$duration_registrations)
 # 0.00   13.00   31.00   44.39   61.00  425.00 
 hist(duration_registrations$duration_registrations)
 
-
-# mean in registration date?
-mean_registrations <- registrationsIND[, list(mean_registration_date=mean(RegistrationDate)), by=CompanyName]
-
-
 # variance in registration date?
 variance_registrations <- registrationsIND[, list(variance_registration_date=var(RegistrationDate)), by=CompanyName]
 variance_registrations[is.na(variance_registration_date), variance_registration_date:=0]
@@ -125,13 +120,11 @@ sameday_registrations <- registrationsIND[, list(sameday_registrations=max(table
 # number of unique registrat dates?
 unique_registration_dates <- registrationsIND[, list(unique_registration_dates=length(unique(RegistrationDate))), by=CompanyName]
 
-
-
 str(sameday_registrations, vec.len=1)
 summary(sameday_registrations$sameday_registrations)
 # Min. 1st Qu.  Median    Mean 3rd Qu.    Max.
 # 1.00    1.00    2.00    2.49    3.00    9.00
-hist(same_registration_date$same_registration_date)
+# hist(same_registration_date$same_registration_date)
 
 # extract state from the address string 
 str(registrationsIND$CompanyAddress) # chr [1:12621] "1112 3rd Drive North, Woburn, MA 01801" ...
@@ -180,7 +173,6 @@ data <- list(state,
              recency_registrations,
              num_registrations,
              sameday_registrations,
-             mean_registrations,
              variance_registrations,
              unique_registration_dates,
              dependent)
