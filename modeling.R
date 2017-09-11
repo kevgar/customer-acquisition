@@ -3,6 +3,7 @@ library("AUC")
 library('lift')
 
 # Split the data in a train and test set
+set.seed(7)
 ind <- 1:nrow(basetable)
 indTrain <- sample(ind,round(0.5*length(ind)))
 indTest <- ind[-indTrain]
@@ -64,4 +65,3 @@ partialPlot(x=rf,x.var="num_registrations",
 
 # In addition the lift and AUC are very good.
 # Hence we can conclude the modeling phase
-

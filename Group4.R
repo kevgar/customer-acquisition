@@ -1,5 +1,9 @@
+# Group 4
+# Yuecheng Fang
+# Kevin Gardner
+
 rm(list=ls())
-# Overview of predict.acquire using pseudo code:
+
 create_model <- function(start_ind, end_ind, start_dep, end_dep) {
     
     # browser() # use for debugging
@@ -51,32 +55,26 @@ create_model <- function(start_ind, end_ind, start_dep, end_dep) {
                 unlist()
         }
         
-        
-        
+        # Get factor levels for the original registrations table
+        # We later apply these on the independent data
         registrations[, state:=get_state(CompanyAddress)]
         stateLevels <- levels(as.factor(registrations$state))
         
         registrations[, zip_first_digit:=get_zip_first_digit(CompanyAddress)]
         zip_first_digitLevels <- levels(as.factor(registrations$zip_first_digit))
         
-        
-        
         cat("Creating basetable..\n")
         # join purchases and customers on "CustomerID"
         purchases_customers <- data.table(inner_join(purchases,customers,by = "CustomerID"))
         
-        
-        # if(train==TRUE){
         # Let t4 be the maximum purchase date
-        t4 <- as.Date(end_dep, "%Y-%m-%d") #dump date
+        t4 <- as.Date(end_dep, "%Y-%m-%d")
         # Let the dependent period be 32 days
         t3 <- as.Date(start_dep, "%Y-%m-%d")
         # Let the operational period be 1 day
         t2 <- as.Date(end_ind, "%Y-%m-%d")
         # Let t1 be the earliest registration date
         t1 <- as.Date(start_ind, "%Y-%m-%d")
-        # Shift time window foreward by this ammount
-        length_ind <- t2 - t1
         
         # Split data into independent and dependent period
         registrationsIND <- registrations[RegistrationDate >= t1 & RegistrationDate <= t2,]
@@ -132,7 +130,6 @@ create_model <- function(start_ind, end_ind, start_dep, end_dep) {
         # Get unique CompanyName and CompanyAddress
         registrationsIND <- unique(registrationsIND[,c("CompanyName","CompanyAddress")])
         
-        
         # Extract state from CompanyAddress
         state <- registrationsIND[,CompanyState:=get_state(CompanyAddress)][,-2]
         state[,CompanyState:=factor(CompanyState,levels=stateLevels)]
@@ -158,8 +155,8 @@ create_model <- function(start_ind, end_ind, start_dep, end_dep) {
     }
     
     # Call get_data to create basetable
-    basetable <- get_data(start_indx=start_ind, end_indx=end_ind, 
-                          start_depx=start_dep, end_depx=end_dep)
+    basetable <- get_data(start_ind, end_ind, 
+                          start_dep, end_dep)
     
     ####################################################
     ## Predict
@@ -204,9 +201,7 @@ create_model <- function(start_ind, end_ind, start_dep, end_dep) {
          data=list(customers=customers,
                    purchases=purchases,
                    registrations=registrations)
-         
-         
-    )
+         )
 }
 
 deploy_model <- function(start_ind, end_ind, model) {
@@ -227,12 +222,9 @@ deploy_model <- function(start_ind, end_ind, model) {
         cat("Loading data..\n")
         customers <- result$data$customers
         purchases <- result$data$purchases
-        registrations <-result$data$registrations
+        registrations <- result$data$registrations
         
-        # registrations[, state:=get_state(CompanyAddress)]
         stateLevels <- levels(as.factor(registrations$state))
-        
-        # registrations[, zip_first_digit:=get_zip_first_digit(CompanyAddress)]
         zip_first_digitLevels <- levels(as.factor(registrations$zip_first_digit))
         
         cat("Creating basetable..\n")
@@ -253,6 +245,7 @@ deploy_model <- function(start_ind, end_ind, model) {
         
         purchases_customers_before_t2 <- unique(purchases_customers[PurchaseDate <= t2,"CompanyName"])
         registrationsIND <- registrationsIND[!(CompanyName %in% purchases_customers_before_t2),]
+        
         # Compute independent variabels (from registrationsIND table)
         
         # Compute number of registrations for each company
@@ -274,13 +267,13 @@ deploy_model <- function(start_ind, end_ind, model) {
         variance_registrations <- registrationsIND[, list(variance_registration_date=var(RegistrationDate)), by=CompanyName]
         variance_registrations[is.na(variance_registration_date), variance_registration_date:=0]
         
-        # number of same-day registrations
+        # number of same-day registrations?
         sameday_registrations <- registrationsIND[, list(sameday_registrations=max(table(RegistrationDate))), by=CompanyName]
         
-        # number of unique registrat dates?
+        # number of unique registration dates?
         unique_registration_dates <- registrationsIND[, list(unique_registration_dates=length(unique(RegistrationDate))), by=CompanyName]
         
-        # Get unique CompanyName and CompanyAddress
+        # Get unique CompanyName and CompanyAddress?
         registrationsIND <- unique(registrationsIND[,c("CompanyName","CompanyAddress")])
         
         get_state <- function(address) {
@@ -306,13 +299,14 @@ deploy_model <- function(start_ind, end_ind, model) {
                 unlist()
         }
         
-        
         # Extract state from CompanyAddress
         state <- registrationsIND[,CompanyState:=get_state(CompanyAddress)][,c("CompanyName", "CompanyState")]
+        # Make levels match original registrants table
         state[,CompanyState:=factor(CompanyState,levels=stateLevels)]
         
         # Extract zip_first_digit from CompanyAddress
         zip_first_digit <- registrationsIND[,CompanyZipFirstDigit:=get_zip_first_digit(CompanyAddress)][,c("CompanyName", "CompanyZipFirstDigit")]
+        # Make levels match original registrants table
         zip_first_digit[,CompanyZipFirstDigit:=factor(CompanyZipFirstDigit,levels=zip_first_digitLevels)]
         
         # join independent and dependent
@@ -331,7 +325,7 @@ deploy_model <- function(start_ind, end_ind, model) {
     }
     
     # Call get_data to create basetable
-    basetable <- get_data(start_indx=start_ind, end_indx=end_ind)
+    basetable <- get_data(start_ind, end_ind)
     
     ####################################################
     ## Predict
@@ -341,10 +335,6 @@ deploy_model <- function(start_ind, end_ind, model) {
     
     # Remove unnecesary columns
     basetable[,c("CompanyName")] <- NULL
-    
-    # Convert character columns to factor
-    basetable[,CompanyState:=as.factor(CompanyState)]
-    basetable[,CompanyZipFirstDigit:=as.factor(CompanyZipFirstDigit)]
     
     cat("Scoring prospects..\n")
     
@@ -357,10 +347,6 @@ deploy_model <- function(start_ind, end_ind, model) {
          model = result$model)
 }
 
-
-
-
-
 system.time(result <- create_model(start_ind="2014-05-31", # Earliest registration date
                                    end_ind="2015-07-30", # Operational period be 1 day
                                    start_dep="2015-07-31", # Dependent period be 32 days
@@ -371,9 +357,37 @@ system.time(result <- create_model(start_ind="2014-05-31", # Earliest registrati
 # Creating train and test set..
 # Fitting random forest..
 # user  system elapsed 
-# 6.362   0.208  15.644 
+# 5.863   0.142  10.485
+
+result$df[1:10,]
+# CompanyName  prob
+# 1228    Blueberry Truckers 0.462
+# 3723            Green Days 0.462
+# 1258     Boot Camp Ladybug 0.444
+# 3753            Green Room 0.444
+# 1235      Boot Camp Border 0.440
+# 3730         Green Gunfire 0.440
+# 1224      Blueberry Rhebok 0.438
+# 3719     Green Consignment 0.438
+# 1223 Blueberry Rectangular 0.430
+# 1230        Blueberry Ware 0.430
+
+result$model
+# Call:
+#     randomForest(x = basetable[indTrain, ], y = Acquisition[indTrain]) 
+# Type of random forest: classification
+# Number of trees: 500
+# No. of variables tried at each split: 2
+# 
+# OOB estimate of  error rate: 24.89%
+# Confusion matrix:
+#     0 1 class.error
+# 0 1874 0           0
+# 1  621 0           1
 
 
+result$auc # [1] 0.8489086
+result$top.decile.lift # [1] 2.184
 
 system.time(result2 <- deploy_model(start_ind="2014-07-03", 
                                     end_ind="2015-08-30", 
@@ -382,9 +396,26 @@ system.time(result2 <- deploy_model(start_ind="2014-07-03",
 # Creating basetable..
 # Scoring prospects..
 # user  system elapsed 
-# 3.979   0.050   3.893 
+# 3.862   0.032   3.738 
 
+result2$df[1:10,]
+# CompanyName  prob
+# 6715        Rainbow Polar 0.916
+# 7386 Seashell Consignment 0.878
+# 6742          Raisin Fire 0.862
+# 9295        Warrior Mania 0.640
+# 4951         Mango Videos 0.506
+# 4913        Mango Dolphin 0.504
+# 5296     Mushroom Leopard 0.494
+# 8249           Sunny Room 0.492
+# 5459            Myth Days 0.490
+# 4905   Mango Casting Call 0.474
 
-
-
+# How many lines of code are in each function?
+function.length <- function(f) {
+    if (is.character(f)) f <- match.fun(f)
+    length(deparse(f))
+}
+function.length(create_model) # [1] 112
+function.length(deploy_model) # [1] 80
 
