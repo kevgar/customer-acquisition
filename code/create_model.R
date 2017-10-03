@@ -1,5 +1,5 @@
 rm(list=ls())
-# Overview of predict.acquire using pseudo code:
+
 create_model <- function(start_ind, end_ind, start_dep, end_dep) {
     
     # browser() # use for debugging

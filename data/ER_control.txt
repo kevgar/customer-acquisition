@@ -1,2 +1,2 @@
-customers.csv   purchases.csv   1:1
-customers.csv   registrations.csv   1:n
+"customers.csv" "purchases.csv" "1:1"
+"customers.csv" "registrations.csv" "1:n"

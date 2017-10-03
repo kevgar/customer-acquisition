@@ -34,4 +34,6 @@ data.frame(registrations=names(registrations))
 # 5 RegistrationDate
 
 ?CityPlot
-CityPlot(pdfmode = "Y")
+CityPlot(controlfile = "ER_control.txt", pdfmode = "Y")
+
+
